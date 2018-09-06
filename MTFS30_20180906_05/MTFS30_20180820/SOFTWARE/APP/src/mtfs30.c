@@ -1,0 +1,274 @@
+/*
+*********************************************************************************************************
+*                                              EXAMPLE CODE
+*
+*                             (c) Copyright 2009; Micrium, Inc.; Weston, FL
+*
+*               All rights reserved.  Protected by international copyright laws.
+*               Knowledge of the source code may NOT be used to develop a similar product.
+*               Please help us continue to provide the Embedded community with the finest
+*               software available.  Your honesty is greatly appreciated.
+*********************************************************************************************************
+*/
+
+/*
+*********************************************************************************************************
+*
+*                                            EXAMPLE CODE
+*
+*                                     ST Microelectronics STM3211
+*                                              on the
+*
+*                                     Micrium uC-Eval-STM32F107
+*                                        Evaluation Board
+*
+* Filename      : app.c
+* Version       : V1.00
+* Programmer(s) : JJL
+                  EHS
+                  Michael Vysotsky
+*********************************************************************************************************
+*/
+
+/*
+*********************************************************************************************************
+*                                             INCLUDE FILES
+*********************************************************************************************************
+*/
+
+#include <includes.h>
+#include "config.h"
+#include "Control\W25X32.h"
+#include "dev.h"
+#include "lwip.h"
+#include "gnss.h"
+#include "mtfs30_debug.h "
+
+/*
+*********************************************************************************************************
+*                                             LOCAL DEFINES
+*********************************************************************************************************
+*/
+
+/*
+*********************************************************************************************************
+*                                            LOCAL VARIABLES
+*********************************************************************************************************
+*/
+
+static  OS_TCB   AppTaskStartTCB; 
+static  CPU_STK  AppTaskStartStk[APP_TASK_START_STK_SIZE];
+
+
+/*
+*********************************************************************************************************
+*                                         FUNCTION PROTOTYPES
+*********************************************************************************************************
+*/
+
+static  void  AppTaskStart  (void *p_arg);
+static  void  mtfs30_init(void);
+
+
+
+
+
+/*
+*********************************************************************************************************
+*                                                main()
+*
+* Description : This is the standard entry point for C code.  It is assumed that your code will call
+*               main() once you have performed all necessary initialization.
+*
+* Arguments   : none
+*
+* Returns     : none
+*********************************************************************************************************
+*/
+
+int  main (void)
+{
+   OS_ERR  err;
+     /* Setup STM32 system (clock, PLL and Flash configuration) */
+  SystemInit();
+  //
+  //! Disable all interrupts.
+  //
+    BSP_IntDisAll();                                           
+  //
+  //! Init uC/OS-III.
+  //
+    OSInit(&err);                                            
+  //
+  //! Create the start task.
+  //
+    OSTaskCreate((OS_TCB    *)&AppTaskStartTCB,                 
+                 (CPU_CHAR  *)"App Task Start",
+                 (OS_TASK_PTR)AppTaskStart, 
+                 (void      *)0,
+                 (OS_PRIO    )APP_TASK_START_PRIO,
+                 (CPU_STK   *)&AppTaskStartStk[0],
+                 (CPU_STK   *)&AppTaskStartStk[APP_TASK_START_STK_SIZE / 10],
+                 (OS_STK_SIZE)APP_TASK_START_STK_SIZE,
+                 (OS_MSG_QTY )0,
+                 (OS_TICK    )0,
+                 (void      *)0,
+                 (OS_OPT     )(OS_OPT_TASK_STK_CHK | OS_OPT_TASK_STK_CLR),
+                 (OS_ERR    *)&err);
+  //
+  //!Start multitasking (i.e. give control to uC/OS-III).
+  //
+    OSStart(&err);                                                
+    return (0);    
+}
+
+/*
+*********************************************************************************************************
+*                                          App_TaskStart()
+*
+* Description : The startup task.  The uC/OS-II ticker should only be initialize once multitasking starts.
+*
+* Argument(s) : p_arg       Argument passed to 'App_TaskStart()' by 'OSTaskCreate()'.
+*
+* Return(s)   : none.
+*
+* Caller(s)   : This is a task.
+*
+* Note(s)     : none.
+*********************************************************************************************************
+*/
+
+/*--------------- LCD Messages ---------------*/
+//#include "stm32_eval.h"
+//#include "stm322xg_eval_lcd.h"
+//#define MESSAGE1   "     STM32F2x7      "
+//#define MESSAGE2   "  STM32F-2 Series   "
+//#define MESSAGE3   "     uCOS-III       "
+
+extern void Snmp_Trap_Task(void);
+extern void Web_Server_Task(void);
+extern void Main_Ctr_Task(void);
+extern void Sntp_Main_Init(void);
+extern void Shell_Server_Task(void);
+extern void Main_Sensor_Task(void);
+static  void  AppTaskStart (void *p_arg)
+{
+
+    CPU_INT32U  cpu_clk_freq; 
+    CPU_INT32U  cnts;
+    OS_ERR      err;
+    
+   (void)p_arg;
+//
+//!Initialize BSP functions.
+//
+    BSP_Init();  
+//
+//!Initialize the uC/CPU services.
+//
+    CPU_Init();                                                 
+//
+//!Determine SysTick reference freq.
+//
+    cpu_clk_freq = BSP_CPU_ClkFreq();  
+//
+//!Determine nbr SysTick increments .
+//
+    cnts = cpu_clk_freq / (CPU_INT32U)OSCfg_TickRate_Hz;  
+//
+//!Init uC/OS periodic time src (SysTick).
+//
+    OS_CPU_SysTickInit(cnts);                                     
+//
+//!Compute CPU capacity with no task running.
+//
+#if OS_CFG_STAT_TASK_EN > 0u
+    OSStatTaskCPUUsageInit(&err);                                 
+#endif
+#if 0
+    CPU_IntDisMeasMaxCurReset(); 
+    //
+    //! spi io initlition.
+    //
+    //SPI IO init.
+    SPI_Flash_Init();
+#endif
+    //
+    //config initalize.
+    //
+     ConfigInit();
+    //
+    //Initialize Lwip stack.
+    //
+
+     lwIPInit(g_sParameters.ulMACAddr, g_sParameters.ulStaticIP, g_sParameters.ulSubnetMask ,
+              g_sParameters.ulGatewayIP, IPADDR_USE_STATIC);
+      //
+    //
+    // Wait for an IP address to be assigned to the board before we try to
+    // initiate any connections.
+    //
+    while(!lwIPLocalIPAddrGet())
+    {
+        //
+        // Do nothing until we get our IP address assigned.
+        //
+        
+    }
+    
+
+
+    /* MTFS30系统初始化  */
+     mtfs30_init();
+    
+    /* 卫星信息查询任务 */
+    gnss_main_task();
+    
+
+      
+    
+//    Snmp_Trap_Task();
+    //
+    //!Create the sensor thread.
+    //
+    //Main_Sensor_Task();
+    //
+    //delete self-task
+    //
+//    OSTaskDel((OS_TCB *)&AppTaskStartTCB,(OS_ERR *)&err);
+//    while (DEF_TRUE) 
+//    {                                            
+//      // BSP_Sleep(1000);      
+//    }    
+  
+}
+
+    
+/*****************************************************************************
+ * 函  数:    mtfs30_init                                                           
+ * 功  能:    MTFS30系统初始化                                                                  
+ * 输  入:    无                          
+ * 输  出:    无                                                    
+ * 返回值:    无                                                    
+ * 创  建:    2018-08-13 changzehai(DTT)                            
+ * 更  新:    无                                       
+ ****************************************************************************/ 
+static void mtfs30_init(void)
+{
+
+    OS_ERR  err;
+    
+    
+
+    /* 使能调试 */
+    debug_init();
+
+	/* 初始化串口 */
+	dev_usart_init();
+	
+	/* 卫星接收机初始化 */
+	gnss_receiver_init();
+	
+
+
+}

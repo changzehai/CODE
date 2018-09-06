@@ -1,0 +1,27 @@
+/*****************************************************************************/
+/* 文件名:    gnss_receiver.h                                                */
+/* 描  述:    GNSS接收器相关处理头文件                                       */
+/* 创  建:    2018-07-20 changzehai(DTT)                                     */
+/* 更  新:    无                                                             */
+/* Copyright 1998 - 2018 DTT. All Rights Reserved                            */
+/*****************************************************************************/
+#ifndef __GNSS_RECEIVER_H_
+#define __GNSS_RECEIVER_H_
+#include "gnss_com.h"
+#include "mtfs30_usart.h"
+#include "ut4b0_receiver.h"
+
+
+
+
+
+/*-------------------------------*/
+/* 函数声明                      */
+/*-------------------------------*/
+extern void gnss_receiver_msg_parser(INT8U *pdata);
+extern void gnss_receiver_init(void);
+extern void gnss_receiver_acmode_set(INT8U ac_mode);
+extern void gnss_receiver_msg_set(INT8U ac_mode);
+
+
+#endif
